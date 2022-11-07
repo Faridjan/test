@@ -3,12 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -20,10 +18,6 @@ import (
 	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/chromedp"
 )
-
-var mu sync.Mutex
-
-const outputDir = "temp"
 
 func main() {
 	http.HandleFunc("/remove", RemoveByLink)
@@ -46,15 +40,13 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		m[k] = v[0]
 	}
 
-	projectName := m["project_name"]
+	//projectName := m["project_name"]
 	imageURL := m["image_url"]
 
-	// Create dir...
-	if projectName == "" {
-		projectName = time.Now().Format("2006_01_02_15_04")
-	}
-
-	mu.Lock()
+	//// Create dir...
+	//if projectName == "" {
+	//	projectName = time.Now().Format("2006_01_02_15_04")
+	//}
 
 	wd, err := os.Getwd()
 	if err != nil {
@@ -62,28 +54,6 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		ErrorResponse(err, w)
 		return
 	}
-
-	path := wd + "/" + outputDir + "/" + projectName
-
-	if _, err := os.Stat(wd + "/" + outputDir); errors.Is(err, os.ErrNotExist) {
-		err := os.Mkdir(wd+"/"+outputDir, os.ModePerm)
-		if err != nil {
-			log.Println(err)
-			ErrorResponse(err, w)
-			return
-		}
-	}
-
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		err := os.Mkdir(path, os.ModePerm)
-		if err != nil {
-			log.Println(err)
-			ErrorResponse(err, w)
-			return
-		}
-	}
-
-	mu.Unlock()
 
 	// Chrome Options...
 	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
@@ -119,7 +89,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 	log.Println("Options done!")
 
 	log.Println("REQUEST:", m)
-	log.Println("PATH:", path)
+	log.Println("PATH:", wd)
 
 	// Task list
 	siteURL := `https://www.watermarkremover.io/ru/upload`
@@ -149,7 +119,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 			return nil
 		}),
 		browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorAllowAndName).
-			WithDownloadPath(path).
+			WithDownloadPath(wd).
 			WithEventsEnabled(true),
 		chromedp.WaitVisible(downloadBtnSelector),
 		chromedp.Click(downloadBtnSelector),
