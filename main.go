@@ -38,6 +38,8 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		m[k] = v[0]
 	}
 
+	log.Println(m)
+
 	ctx := context.Background()
 
 	opts := []chromedp.ExecAllocatorOption{
