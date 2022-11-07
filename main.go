@@ -12,7 +12,10 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/browser"
+	"github.com/chromedp/cdproto/target"
 
+	"github.com/chromedp/cdproto/page"
+	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 )
 
@@ -66,6 +69,28 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 			if ev.State == browser.DownloadProgressStateCompleted {
 				done <- ev.GUID
 				log.Printf("state: %s, completed: %s\n", ev.State.String(), ev.GUID)
+			}
+		}
+	})
+
+	var errChan = make(chan error, 1)
+
+	chromedp.ListenTarget(ctxWithLog, func(ev interface{}) {
+		switch ev := ev.(type) {
+		case *cdpruntime.EventConsoleAPICalled:
+			if ev.Type == "error" {
+				log.Println("target event: received error", ev)
+			}
+
+		case *cdpruntime.EventExceptionThrown:
+			log.Println("target event: received exception", ev)
+
+		case *target.EventTargetCrashed:
+			log.Println("target event: received crashed event", ev)
+
+		case *browser.EventDownloadProgress:
+			if ev.State == browser.DownloadProgressStateCanceled {
+				errChan <- errors.New(browser.DownloadProgressStateCanceled.String())
 			}
 		}
 	})
@@ -135,6 +160,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorAllowAndName).
 			WithDownloadPath(path).
 			WithEventsEnabled(true),
+		page.SetDownloadBehavior(page.SetDownloadBehaviorBehaviorAllow).WithDownloadPath(path),
 		chromedp.WaitVisible(downloadBtnSelector),
 		chromedp.Click(downloadBtnSelector),
 		chromedp.ActionFunc(func(ctx context.Context) error {
@@ -149,6 +175,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 
 	log.Println("Before DONE")
 
+	time.Sleep(3 * time.Second)
 	guid := <-done
 
 	log.Println("DONE!", guid)
