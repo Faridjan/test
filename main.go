@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -23,6 +22,8 @@ import (
 )
 
 var mu sync.Mutex
+
+const outputDir = "temp"
 
 func main() {
 	http.HandleFunc("/remove", RemoveByLink)
@@ -53,22 +54,47 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		projectName = time.Now().Format("2006_01_02_15_04")
 	}
 
-	ex, err := os.Executable()
+	mu.Lock()
+
+	wd, err := os.Getwd()
 	if err != nil {
 		log.Println(err)
 		ErrorResponse(err, w)
 		return
 	}
-	exPath := filepath.Dir(ex)
 
-	ctx := context.Background()
+	path := wd + "/" + outputDir + "/" + projectName
+
+	if _, err := os.Stat(wd + "/" + outputDir); errors.Is(err, os.ErrNotExist) {
+		err := os.Mkdir(wd+"/"+outputDir, os.ModePerm)
+		if err != nil {
+			log.Println(err)
+			ErrorResponse(err, w)
+			return
+		}
+	}
+
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		err := os.Mkdir(path, os.ModePerm)
+		if err != nil {
+			log.Println(err)
+			ErrorResponse(err, w)
+			return
+		}
+	}
+
+	mu.Unlock()
+
+	// Chrome Options...
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
+	defer cancel()
 
 	opts := []chromedp.ExecAllocatorOption{
 		chromedp.Headless,
 		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-extensions", false),
 		chromedp.Flag("profile-directory", "Default"),
-		chromedp.UserDataDir(exPath + "/chromium_profile"),
+		chromedp.UserDataDir(wd + "/chromium_profile"),
 		chromedp.UserAgent(getRandomUserAgent()),
 	}
 
@@ -91,21 +117,6 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 	})
 
 	log.Println("Options done!")
-
-	mu.Lock()
-
-	path := exPath + "/temp/" + projectName
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		log.Println("Create dir:", path)
-		err := os.Mkdir(path, os.ModePerm)
-		if err != nil {
-			log.Println("os.Mkdir(path, os.ModePerm)", err)
-			ErrorResponse(err, w)
-			return
-		}
-	}
-
-	mu.Unlock()
 
 	log.Println("REQUEST:", m)
 	log.Println("PATH:", path)
