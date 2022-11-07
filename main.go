@@ -142,7 +142,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			log.Println("- Navigate")
 			chromedp.FullScreenshot(&buf, 90)
-			if err := os.WriteFile("fullScreenshot.png", buf, 0o644); err != nil {
+			if err := os.WriteFile(exPath+"/fullScreenshot.png", buf, 0o644); err != nil {
 				return err
 			}
 			return nil
@@ -153,7 +153,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 			log.Println("- Click URL")
 			buf = []byte{}
 			chromedp.FullScreenshot(&buf, 90)
-			if err := os.WriteFile("fullScreenshot2.png", buf, 0o644); err != nil {
+			if err := os.WriteFile(exPath+"/fullScreenshot2.png", buf, 0o644); err != nil {
 				return err
 			}
 			return nil
@@ -164,7 +164,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			buf = []byte{}
 			chromedp.FullScreenshot(&buf, 90)
-			if err := os.WriteFile("fullScreenshot3.png", buf, 0o644); err != nil {
+			if err := os.WriteFile(exPath+"/fullScreenshot3.png", buf, 0o644); err != nil {
 				return err
 			}
 			log.Println("- Send image")
@@ -179,7 +179,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			buf = []byte{}
 			chromedp.FullScreenshot(&buf, 90)
-			if err := os.WriteFile("fullScreenshot4.png", buf, 0o644); err != nil {
+			if err := os.WriteFile(exPath+"/fullScreenshot4.png", buf, 0o644); err != nil {
 				return err
 			}
 			log.Println("- Click download")
