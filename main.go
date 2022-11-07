@@ -119,9 +119,6 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 			log.Println("os.Mkdir(path, os.ModePerm)", err)
 			return
 		}
-	} else {
-		log.Println("ELSE os.Mkdir(path, os.ModePerm)", err)
-		return
 	}
 
 	mu.Unlock()
