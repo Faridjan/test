@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -79,23 +80,25 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		projectName = time.Now().Format("2006_01_02_15_04")
 	}
 
-	path := "/temp" + "/" + projectName
-
-	if _, err := os.Stat("/out"); errors.Is(err, os.ErrNotExist) {
-		err := os.Mkdir("/out"+
-			"", os.ModePerm)
-		if err != nil {
-			log.Println(err)
-			return
-		}
+	ex, err := os.Executable()
+	if err != nil {
+		log.Println(err)
+		return
 	}
+	exPath := filepath.Dir(ex)
+
+	path := exPath + "/temp/" + projectName
 
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		log.Println("Create dir:", path)
 		err := os.Mkdir(path, os.ModePerm)
 		if err != nil {
 			log.Println(err)
 			return
 		}
+	} else {
+		log.Println(err)
+		return
 	}
 
 	mu.Unlock()
@@ -110,7 +113,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 	downloadBtnSelector := `//*[@id="root"]/div/div[1]/div[2]/div[2]/div/div[2]/div/div/div[2]/div/div[1]/button`
 
 	// RUN
-	err := chromedp.Run(ctxWithLog,
+	err = chromedp.Run(ctxWithLog,
 		chromedp.Navigate(siteURL),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			log.Println("- Navigate")
