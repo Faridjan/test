@@ -38,7 +38,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		m[k] = v[0]
 	}
 
-	log.Println(m)
+	log.Println("Params:", m)
 
 	ctx := context.Background()
 
@@ -54,13 +54,14 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 	ctxAllocator, cancelAllocator := chromedp.NewExecAllocator(ctx, append(chromedp.DefaultExecAllocatorOptions[:], opts...)...)
 	defer cancelAllocator()
 
-	ctxWithLog, cancelWithLog := chromedp.NewContext(ctxAllocator, chromedp.WithDebugf(log.Printf))
+	ctxWithLog, cancelWithLog := chromedp.NewContext(ctxAllocator, chromedp.WithLogf(log.Printf))
 	defer cancelWithLog()
 
 	done := make(chan string, len(m["image_link"]))
 
 	chromedp.ListenTarget(ctxWithLog, func(v interface{}) {
 		if ev, ok := v.(*browser.EventDownloadProgress); ok {
+			log.Println("Listen:", ev.State)
 			if ev.State == browser.DownloadProgressStateCompleted {
 				done <- ev.GUID
 				log.Printf("state: %s, completed: %s\n", ev.State.String(), ev.GUID)
@@ -69,6 +70,8 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 	})
 
 	mu.Lock()
+
+	log.Println("Options done!")
 
 	// Create dir...
 	projectName := m["project_name"]
@@ -97,6 +100,8 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 
 	mu.Unlock()
 
+	log.Println("Dirs done!")
+
 	// Task list
 	siteURL := `https://www.watermarkremover.io/ru/upload`
 	imageLinkButtonSelector := `//*[@id="PasteURL__HomePage"]`
@@ -107,21 +112,39 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 	// RUN
 	err := chromedp.Run(ctxWithLog,
 		chromedp.Navigate(siteURL),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("- Navigate")
+			return nil
+		}),
 		chromedp.WaitVisible(imageLinkButtonSelector),
 		chromedp.Click(imageLinkButtonSelector),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("- Click URL")
+			return nil
+		}),
 		chromedp.WaitVisible(inputImageLinkSelector),
 		chromedp.SendKeys(inputImageLinkSelector, m["image_link"]),
 		chromedp.Click(submitImageLinkSelector),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("- Send image")
+			return nil
+		}),
 		browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorAllowAndName).
 			WithDownloadPath(path).
 			WithEventsEnabled(true),
 		chromedp.WaitVisible(downloadBtnSelector),
 		chromedp.Click(downloadBtnSelector),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("- Click download")
+			return nil
+		}),
 	)
 	if err != nil {
 		log.Println(err)
 		return
 	}
+
+	log.Println("Before DONE")
 
 	guid := <-done
 
