@@ -107,6 +107,9 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 
 	mu.Unlock()
 
+	log.Println("REQUEST:", m)
+	log.Println("PATH:", path)
+
 	// Task list
 	siteURL := `https://www.watermarkremover.io/ru/upload`
 	imageLinkButtonSelector := `//*[@id="PasteURL__HomePage"]`
@@ -117,16 +120,32 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 	// RUN
 	errRun := chromedp.Run(ctxWithLog,
 		chromedp.Navigate(siteURL),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("- Navigate")
+			return nil
+		}),
 		chromedp.WaitVisible(imageLinkButtonSelector),
 		chromedp.Click(imageLinkButtonSelector),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("- Click URL")
+			return nil
+		}),
 		chromedp.WaitVisible(inputImageLinkSelector),
 		chromedp.SendKeys(inputImageLinkSelector, imageURL),
 		chromedp.Click(submitImageLinkSelector),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("- Submit URL")
+			return nil
+		}),
 		browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorAllowAndName).
 			WithDownloadPath(path).
 			WithEventsEnabled(true),
 		chromedp.WaitVisible(downloadBtnSelector),
 		chromedp.Click(downloadBtnSelector),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("- Click Download")
+			return nil
+		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			_, _, err := runtime.Evaluate("window.localStorage.clear()").Do(ctx)
 			if err != nil {
