@@ -44,6 +44,21 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 
 	log.Println("Params:", m)
 
+	// Create dir...
+	projectName := m["project_name"]
+	if projectName == "" {
+		projectName = time.Now().Format("2006_01_02_15_04")
+	}
+
+	ex, err := os.Executable()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	exPath := filepath.Dir(ex)
+
+	path := exPath + "/temp/" + projectName
+
 	ctx := context.Background()
 
 	opts := []chromedp.ExecAllocatorOption{
@@ -51,7 +66,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-extensions", false),
 		chromedp.Flag("profile-directory", "Default"),
-		chromedp.UserDataDir("/chromium_profile"),
+		chromedp.UserDataDir(exPath + "/chromium_profile"),
 		chromedp.UserAgent(getRandomUserAgent()),
 	}
 
@@ -99,21 +114,6 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 
 	log.Println("Options done!")
 
-	// Create dir...
-	projectName := m["project_name"]
-	if projectName == "" {
-		projectName = time.Now().Format("2006_01_02_15_04")
-	}
-
-	ex, err := os.Executable()
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	exPath := filepath.Dir(ex)
-
-	path := exPath + "/temp/" + projectName
-
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		log.Println("Create dir:", path)
 		err := os.Mkdir(path, os.ModePerm)
@@ -128,32 +128,45 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 
 	mu.Unlock()
 
-	log.Println("Dirs done!")
-
 	// Task list
 	siteURL := `https://www.watermarkremover.io/ru/upload`
 	imageLinkButtonSelector := `//*[@id="PasteURL__HomePage"]`
 	inputImageLinkSelector := `//*[@id="modal-root"]/div/div/div[1]/div[1]/input`
+
 	submitImageLinkSelector := `//*[@id="modal-root"]/div/div/div[1]/div[1]/button`
 	downloadBtnSelector := `//*[@id="root"]/div/div[1]/div[2]/div[2]/div/div[2]/div/div/div[2]/div/div[1]/button`
+
+	var buf []byte
 
 	// RUN
 	err = chromedp.Run(ctxWithLog,
 		chromedp.Navigate(siteURL),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			log.Println("- Navigate")
+			chromedp.FullScreenshot(&buf, 90)
+			if err := os.WriteFile("fullScreenshot.png", buf, 0o644); err != nil {
+				log.Fatal(err)
+			}
 			return nil
 		}),
 		chromedp.WaitVisible(imageLinkButtonSelector),
 		chromedp.Click(imageLinkButtonSelector),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			log.Println("- Click URL")
+			chromedp.FullScreenshot(&buf, 90)
+			if err := os.WriteFile("fullScreenshot2.png", buf, 0o644); err != nil {
+				log.Fatal(err)
+			}
 			return nil
 		}),
 		chromedp.WaitVisible(inputImageLinkSelector),
 		chromedp.SendKeys(inputImageLinkSelector, m["image_link"]),
 		chromedp.Click(submitImageLinkSelector),
 		chromedp.ActionFunc(func(ctx context.Context) error {
+			chromedp.FullScreenshot(&buf, 90)
+			if err := os.WriteFile("fullScreenshot3.png", buf, 0o644); err != nil {
+				log.Fatal(err)
+			}
 			log.Println("- Send image")
 			return nil
 		}),
@@ -164,6 +177,10 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		chromedp.WaitVisible(downloadBtnSelector),
 		chromedp.Click(downloadBtnSelector),
 		chromedp.ActionFunc(func(ctx context.Context) error {
+			chromedp.FullScreenshot(&buf, 90)
+			if err := os.WriteFile("fullScreenshot4.png", buf, 0o644); err != nil {
+				log.Fatal(err)
+			}
 			log.Println("- Click download")
 			return nil
 		}),
