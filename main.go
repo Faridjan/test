@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"math/rand"
@@ -11,29 +12,31 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chromedp/cdproto/browser"
-	"github.com/chromedp/cdproto/target"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/chromedp/cdproto/page"
-	cdpruntime "github.com/chromedp/cdproto/runtime"
+	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/runtime"
+
+	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/chromedp"
 )
 
 var mu sync.Mutex
 
 func main() {
-
 	http.HandleFunc("/remove", RemoveByLink)
 
 	err := http.ListenAndServe(":80", nil)
 	if err != nil {
-		log.Println(err.Error())
+		log.Fatal(err.Error())
 	}
 }
 
 func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 	if err := request.ParseForm(); err != nil {
 		log.Println(err)
+		ErrorResponse(err, w)
 		return
 	}
 
@@ -42,10 +45,10 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		m[k] = v[0]
 	}
 
-	log.Println("Params:", m)
+	projectName := m["project_name"]
+	imageURL := m["image_url"]
 
 	// Create dir...
-	projectName := m["project_name"]
 	if projectName == "" {
 		projectName = time.Now().Format("2006_01_02_15_04")
 	}
@@ -53,6 +56,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 	ex, err := os.Executable()
 	if err != nil {
 		log.Println(err)
+		ErrorResponse(err, w)
 		return
 	}
 	exPath := filepath.Dir(ex)
@@ -74,7 +78,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 	ctxWithLog, cancelWithLog := chromedp.NewContext(ctxAllocator, chromedp.WithLogf(log.Printf))
 	defer cancelWithLog()
 
-	done := make(chan string, len(m["image_link"]))
+	done := make(chan string, 1)
 
 	chromedp.ListenTarget(ctxWithLog, func(v interface{}) {
 		if ev, ok := v.(*browser.EventDownloadProgress); ok {
@@ -86,37 +90,17 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		}
 	})
 
-	chromedp.ListenTarget(ctxWithLog, func(ev interface{}) {
-		switch ev := ev.(type) {
-		case *cdpruntime.EventConsoleAPICalled:
-			if ev.Type == "error" {
-				log.Println("target event: received error", ev)
-			}
-
-		case *cdpruntime.EventExceptionThrown:
-			log.Println("target event: received exception", ev)
-
-		case *target.EventTargetCrashed:
-			log.Println("target event: received crashed event", ev)
-
-		case *browser.EventDownloadProgress:
-			if ev.State == browser.DownloadProgressStateCanceled {
-				log.Println(browser.DownloadProgressStateCanceled.String())
-			}
-		}
-	})
+	log.Println("Options done!")
 
 	mu.Lock()
 
-	log.Println("Options done!")
-
 	path := exPath + "/temp/" + projectName
-
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		log.Println("Create dir:", path)
 		err := os.Mkdir(path, os.ModePerm)
 		if err != nil {
 			log.Println("os.Mkdir(path, os.ModePerm)", err)
+			ErrorResponse(err, w)
 			return
 		}
 	}
@@ -127,73 +111,55 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 	siteURL := `https://www.watermarkremover.io/ru/upload`
 	imageLinkButtonSelector := `//*[@id="PasteURL__HomePage"]`
 	inputImageLinkSelector := `//*[@id="modal-root"]/div/div/div[1]/div[1]/input`
-
 	submitImageLinkSelector := `//*[@id="modal-root"]/div/div/div[1]/div[1]/button`
 	downloadBtnSelector := `//*[@id="root"]/div/div[1]/div[2]/div[2]/div/div[2]/div/div/div[2]/div/div[1]/button`
-
-	var buf []byte
 
 	// RUN
 	errRun := chromedp.Run(ctxWithLog,
 		chromedp.Navigate(siteURL),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			log.Println("- Navigate")
-			chromedp.FullScreenshot(&buf, 90)
-			if err := os.WriteFile(exPath+"/fullScreenshot.png", buf, 0o644); err != nil {
-				return err
-			}
-			return nil
-		}),
 		chromedp.WaitVisible(imageLinkButtonSelector),
 		chromedp.Click(imageLinkButtonSelector),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			log.Println("- Click URL")
-			buf = []byte{}
-			chromedp.FullScreenshot(&buf, 90)
-			if err := os.WriteFile(exPath+"/fullScreenshot2.png", buf, 0o644); err != nil {
-				return err
-			}
-			return nil
-		}),
 		chromedp.WaitVisible(inputImageLinkSelector),
-		chromedp.SendKeys(inputImageLinkSelector, m["image_link"]),
+		chromedp.SendKeys(inputImageLinkSelector, imageURL),
 		chromedp.Click(submitImageLinkSelector),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			buf = []byte{}
-			chromedp.FullScreenshot(&buf, 90)
-			if err := os.WriteFile(exPath+"/fullScreenshot3.png", buf, 0o644); err != nil {
-				return err
-			}
-			log.Println("- Send image")
-			return nil
-		}),
 		browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorAllowAndName).
 			WithDownloadPath(path).
 			WithEventsEnabled(true),
-		page.SetDownloadBehavior(page.SetDownloadBehaviorBehaviorAllow).WithDownloadPath(path),
 		chromedp.WaitVisible(downloadBtnSelector),
 		chromedp.Click(downloadBtnSelector),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			buf = []byte{}
-			chromedp.FullScreenshot(&buf, 90)
-			if err := os.WriteFile(exPath+"/fullScreenshot4.png", buf, 0o644); err != nil {
+			_, _, err := runtime.Evaluate("window.localStorage.clear()").Do(ctx)
+			if err != nil {
 				return err
 			}
-			log.Println("- Click download")
+
+			err = network.ClearBrowserCache().Do(ctx)
+			if err != nil {
+				return err
+			}
+
+			err = network.ClearBrowserCookies().Do(ctx)
+			if err != nil {
+				return err
+			}
+
 			return nil
 		}),
 	)
 	if errRun != nil {
-		log.Println(errRun)
+		ErrorResponse(errRun, w)
 		return
 	}
 
 	log.Println("Before DONE")
 
 	time.Sleep(3 * time.Second)
+
 	guid := <-done
 
 	log.Println("DONE!", guid)
+
+	JsonResponse(w, map[string]string{"msg": "success"})
 }
 
 func getRandomUserAgent() string {
@@ -262,4 +228,48 @@ func getRandomUserAgent() string {
 	randUserAgent := rand.Intn((len(listUserAgents)-1)-0) + 0
 
 	return listUserAgents[randUserAgent]
+}
+
+func JsonResponse(responseWriter http.ResponseWriter, body interface{}) {
+	responseWriter.WriteHeader(http.StatusOK)
+
+	var jsonByte []byte
+	var err error
+
+	switch body.(type) {
+	case proto.Message: // If body from gRPC response
+		mOpt := protojson.MarshalOptions{
+			UseProtoNames:   true,
+			EmitUnpopulated: true,
+		}
+
+		jsonByte, err = mOpt.Marshal(body.(proto.Message))
+		if err != nil {
+			ErrorResponse(err, responseWriter)
+			return
+		}
+
+	case map[string]interface{}: // if custom body
+		jsonByte, err = json.Marshal(body)
+		if err != nil {
+			ErrorResponse(err, responseWriter)
+			return
+		}
+	}
+
+	_, err = responseWriter.Write(jsonByte)
+	if err != nil {
+		ErrorResponse(err, responseWriter)
+		return
+	}
+}
+
+func ErrorResponse(err error, w http.ResponseWriter) {
+	w.WriteHeader(500)
+	_, errW := w.Write([]byte(`{"error": "` + err.Error() + `"}`))
+	if errW != nil {
+		log.Println("Error from ResponseWriter: " + err.Error())
+		return
+	}
+	return
 }
