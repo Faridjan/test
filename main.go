@@ -85,8 +85,8 @@ func worker(imageURL string) {
 	defer cancel()
 
 	opts := []chromedp.ExecAllocatorOption{
-		//chromedp.Headless,
-		chromedp.Flag("headless", false),
+		chromedp.Headless,
+		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-extensions", false),
 		chromedp.Flag("profile-directory", "Default"),
 		chromedp.UserDataDir(wd + "chromium_profile"),
