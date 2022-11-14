@@ -89,14 +89,14 @@ func worker(imageURL string) {
 		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-extensions", false),
 		chromedp.Flag("profile-directory", "Default"),
-		chromedp.UserDataDir(wd + "chromium_profile"),
+		chromedp.UserDataDir("/chromium_profile"),
 		chromedp.UserAgent(getRandomUserAgent()),
 	}
 
 	ctxAllocator, cancelAllocator := chromedp.NewExecAllocator(ctx, append(chromedp.DefaultExecAllocatorOptions[:], opts...)...)
 	defer cancelAllocator()
 
-	ctxWithLog, cancelWithLog := chromedp.NewContext(ctxAllocator, chromedp.WithLogf(log.Printf))
+	ctxWithLog, cancelWithLog := chromedp.NewContext(ctxAllocator, chromedp.WithDebugf(log.Printf))
 	defer cancelWithLog()
 
 	done := make(chan string, 1)
