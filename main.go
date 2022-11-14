@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -19,30 +21,55 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-func main() {
-	http.HandleFunc("/remove", RemoveByLink)
+type ImageMeta struct {
+	Src string `json:"src"`
+}
 
-	err := http.ListenAndServe(":8080", nil)
+func main() {
+	images, err := getImagesLinksFromAdvert(context.Background(), "49635201")
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal(err)
+	}
+
+	for _, img := range images {
+		worker(img)
 	}
 }
 
-func RemoveByLink(w http.ResponseWriter, request *http.Request) {
-	if err := request.ParseForm(); err != nil {
-		log.Println(err)
-		ErrorResponse(err, w)
-		return
+func getImagesLinksFromAdvert(ctx context.Context, advertID string) ([]string, error) {
+	resp, err := http.Get("https://m.krisha.kz/a/show/" + advertID)
+	if err != nil {
+		return nil, err
 	}
 
-	m := map[string]string{}
-	for k, v := range request.Form {
-		m[k] = v[0]
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
-	//projectName := m["project_name"]
-	imageURL := m["image_url"]
+	startCutData := strings.Split(string(body), `"photos":[{`)
+	if len(startCutData) < 2 {
+		log.Fatalf("Wrong advert ID")
+	}
 
+	endCutData := strings.Split(startCutData[1], `}],`)
+
+	var listDataImages []ImageMeta
+
+	if err := json.Unmarshal([]byte("[{"+endCutData[0]+"}]"), &listDataImages); err != nil {
+		return nil, err
+	}
+
+	imagesLinks := make([]string, 0, len(listDataImages))
+
+	for _, item := range listDataImages {
+		imagesLinks = append(imagesLinks, item.Src)
+	}
+
+	return imagesLinks, nil
+}
+
+func worker(imageURL string) {
 	//// Create dir...
 	//if projectName == "" {
 	//	projectName = time.Now().Format("2006_01_02_15_04")
@@ -50,9 +77,7 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 
 	wd, err := os.Getwd()
 	if err != nil {
-		log.Println(err)
-		ErrorResponse(err, w)
-		return
+		log.Fatal(err)
 	}
 
 	// Chrome Options...
@@ -87,9 +112,6 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 	})
 
 	log.Println("Options done!")
-
-	log.Println("REQUEST:", m)
-	log.Println("PATH:", wd)
 
 	// Task list
 	siteURL := `https://www.watermarkremover.io/ru/upload`
@@ -147,19 +169,14 @@ func RemoveByLink(w http.ResponseWriter, request *http.Request) {
 		}),
 	)
 	if errRun != nil {
-		ErrorResponse(errRun, w)
-		return
+		log.Fatal(err)
 	}
 
 	log.Println("Before DONE")
 
-	time.Sleep(3 * time.Second)
-
 	guid := <-done
 
 	log.Println("DONE!", guid)
-
-	JsonResponse(w, map[string]string{"msg": "success"})
 }
 
 func getRandomUserAgent() string {
