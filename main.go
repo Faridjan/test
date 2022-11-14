@@ -96,7 +96,7 @@ func worker(imageURL string) {
 	ctxAllocator, cancelAllocator := chromedp.NewExecAllocator(ctx, append(chromedp.DefaultExecAllocatorOptions[:], opts...)...)
 	defer cancelAllocator()
 
-	ctxWithLog, cancelWithLog := chromedp.NewContext(ctxAllocator, chromedp.WithDebugf(log.Printf))
+	ctxWithLog, cancelWithLog := chromedp.NewContext(ctxAllocator, chromedp.WithLogf(log.Printf))
 	defer cancelWithLog()
 
 	done := make(chan string, 1)
