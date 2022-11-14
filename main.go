@@ -89,6 +89,7 @@ func worker(imageURL string) {
 		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-extensions", false),
 		chromedp.Flag("profile-directory", "Default"),
+		chromedp.Flag("disable-sync", false),
 		chromedp.UserDataDir("/chromium_profile"),
 		chromedp.UserAgent(getRandomUserAgent()),
 	}
